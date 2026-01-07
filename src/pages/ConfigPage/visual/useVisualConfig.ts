@@ -1,0 +1,791 @@
+import { useCallback, useMemo, useState } from 'react';
+import {
+  applyYamlPatches,
+  extractYamlCommentSection,
+  getYamlObjectArrayAtPath,
+  getYamlScalarAtPath,
+  getYamlStringArrayAtPath,
+  hasYamlTopLevelKey,
+  listYamlMapKeysAtPath,
+  normalizeYamlSnippetToRoot,
+  removeYamlCommentSectionByMarkers,
+} from '@/utils/yamlPatch';
+import type {
+  OauthChannelMappings,
+  OauthModelMappingEntry,
+  PayloadParamValueType,
+  PayloadRule,
+  VisualConfigValues,
+} from './types';
+import { DEFAULT_VISUAL_VALUES, makeClientId } from './types';
+
+// Helper to parse payload rules from YAML object arrays
+function parsePayloadRules(rawRules: Array<Record<string, unknown>>): PayloadRule[] {
+  return rawRules.map((rule) => {
+    const modelsRaw = Array.isArray(rule?.models) ? rule.models : [];
+    const paramsRaw = typeof rule?.params === 'object' && rule.params !== null ? rule.params : {};
+
+    const models = modelsRaw.map((m: unknown) => {
+      if (typeof m === 'object' && m !== null) {
+        const obj = m as Record<string, unknown>;
+        return {
+          id: makeClientId(),
+          name: typeof obj.name === 'string' ? obj.name : '',
+          protocol: ['openai', 'gemini', 'claude', 'codex'].includes(String(obj.protocol || ''))
+            ? (obj.protocol as 'openai' | 'gemini' | 'claude' | 'codex')
+            : undefined,
+        };
+      }
+      return { id: makeClientId(), name: '', protocol: undefined };
+    });
+
+    const params = Object.entries(paramsRaw as Record<string, unknown>).map(([path, value]) => {
+      let valueType: PayloadParamValueType = 'string';
+      let valueStr = '';
+
+      if (typeof value === 'boolean') {
+        valueType = 'boolean';
+        valueStr = String(value);
+      } else if (typeof value === 'number') {
+        valueType = 'number';
+        valueStr = String(value);
+      } else if (typeof value === 'string') {
+        valueType = 'string';
+        valueStr = value;
+      } else if (value !== null && typeof value === 'object') {
+        valueType = 'json';
+        valueStr = JSON.stringify(value);
+      }
+
+      return {
+        id: makeClientId(),
+        path,
+        valueType,
+        value: valueStr,
+      };
+    });
+
+    return {
+      id: makeClientId(),
+      models: models.length ? models : [{ id: makeClientId(), name: '', protocol: undefined }],
+      params: params.length
+        ? params
+        : [
+            {
+              id: makeClientId(),
+              path: '',
+              valueType: 'string' as PayloadParamValueType,
+              value: '',
+            },
+          ],
+    };
+  });
+}
+
+// Helper to serialize payload rules to YAML-compatible object arrays
+function serializePayloadRules(rules: PayloadRule[]): Array<Record<string, unknown>> {
+  const result: Array<Record<string, unknown>> = [];
+  for (const rule of rules) {
+    const models = (rule.models || [])
+      .filter((m) => m.name.trim())
+      .map((m) => {
+        const obj: Record<string, unknown> = { name: m.name.trim() };
+        if (m.protocol) obj.protocol = m.protocol;
+        return obj;
+      });
+
+    const params: Record<string, unknown> = {};
+    (rule.params || []).forEach((p) => {
+      if (!p.path.trim()) return;
+      let value: unknown = p.value;
+      if (p.valueType === 'number') {
+        const num = Number(p.value);
+        value = Number.isFinite(num) ? num : p.value;
+      } else if (p.valueType === 'boolean') {
+        value = p.value === 'true';
+      } else if (p.valueType === 'json') {
+        try {
+          value = JSON.parse(p.value);
+        } catch {
+          value = p.value;
+        }
+      }
+      params[p.path.trim()] = value;
+    });
+
+    if (models.length > 0) {
+      result.push({ models, params });
+    }
+  }
+  return result;
+}
+
+export function useVisualConfig() {
+  const [visualValues, setVisualValues] = useState<VisualConfigValues>(DEFAULT_VISUAL_VALUES);
+  const [visualInitial, setVisualInitial] = useState<VisualConfigValues>(DEFAULT_VISUAL_VALUES);
+
+  const loadVisualValuesFromYaml = useCallback((yamlText: string) => {
+    const next: VisualConfigValues = { ...DEFAULT_VISUAL_VALUES };
+
+    const host = getYamlScalarAtPath(yamlText, ['host']);
+    if (typeof host === 'string') next.host = host;
+
+    const port = getYamlScalarAtPath(yamlText, ['port']);
+    if (typeof port === 'number') next.port = String(port);
+    else if (typeof port === 'string' && port.trim()) next.port = port.trim();
+
+    const tlsEnable = getYamlScalarAtPath(yamlText, ['tls', 'enable']);
+    if (typeof tlsEnable === 'boolean') next.tlsEnable = tlsEnable;
+    const tlsCert = getYamlScalarAtPath(yamlText, ['tls', 'cert']);
+    if (typeof tlsCert === 'string') next.tlsCert = tlsCert;
+    const tlsKey = getYamlScalarAtPath(yamlText, ['tls', 'key']);
+    if (typeof tlsKey === 'string') next.tlsKey = tlsKey;
+
+    const rmAllowRemote = getYamlScalarAtPath(yamlText, ['remote-management', 'allow-remote']);
+    if (typeof rmAllowRemote === 'boolean') next.rmAllowRemote = rmAllowRemote;
+    const rmSecretKey = getYamlScalarAtPath(yamlText, ['remote-management', 'secret-key']);
+    if (typeof rmSecretKey === 'string') next.rmSecretKey = rmSecretKey;
+    const rmDisableControlPanel = getYamlScalarAtPath(yamlText, [
+      'remote-management',
+      'disable-control-panel',
+    ]);
+    if (typeof rmDisableControlPanel === 'boolean')
+      next.rmDisableControlPanel = rmDisableControlPanel;
+    const rmPanelRepo = getYamlScalarAtPath(yamlText, [
+      'remote-management',
+      'panel-github-repository',
+    ]);
+    if (typeof rmPanelRepo === 'string') next.rmPanelRepo = rmPanelRepo;
+
+    const authDir = getYamlScalarAtPath(yamlText, ['auth-dir']);
+    if (typeof authDir === 'string') next.authDir = authDir;
+    const apiKeys = getYamlStringArrayAtPath(yamlText, ['api-keys']);
+    if (Array.isArray(apiKeys)) next.apiKeysText = apiKeys.join('\n');
+
+    const debug = getYamlScalarAtPath(yamlText, ['debug']);
+    if (typeof debug === 'boolean') next.debug = debug;
+    const commercialMode = getYamlScalarAtPath(yamlText, ['commercial-mode']);
+    if (typeof commercialMode === 'boolean') next.commercialMode = commercialMode;
+    const loggingToFile = getYamlScalarAtPath(yamlText, ['logging-to-file']);
+    if (typeof loggingToFile === 'boolean') next.loggingToFile = loggingToFile;
+    const logsMax = getYamlScalarAtPath(yamlText, ['logs-max-total-size-mb']);
+    if (typeof logsMax === 'number') next.logsMaxTotalSizeMb = String(logsMax);
+    else if (typeof logsMax === 'string' && logsMax.trim())
+      next.logsMaxTotalSizeMb = logsMax.trim();
+    const usageEnabled = getYamlScalarAtPath(yamlText, ['usage-statistics-enabled']);
+    if (typeof usageEnabled === 'boolean') next.usageStatisticsEnabled = usageEnabled;
+
+    const proxyUrl = getYamlScalarAtPath(yamlText, ['proxy-url']);
+    if (typeof proxyUrl === 'string') next.proxyUrl = proxyUrl;
+    const forceModelPrefix = getYamlScalarAtPath(yamlText, ['force-model-prefix']);
+    if (typeof forceModelPrefix === 'boolean') next.forceModelPrefix = forceModelPrefix;
+    const requestRetry = getYamlScalarAtPath(yamlText, ['request-retry']);
+    if (typeof requestRetry === 'number') next.requestRetry = String(requestRetry);
+    else if (typeof requestRetry === 'string' && requestRetry.trim())
+      next.requestRetry = requestRetry.trim();
+    const maxRetryInterval = getYamlScalarAtPath(yamlText, ['max-retry-interval']);
+    if (typeof maxRetryInterval === 'number') next.maxRetryInterval = String(maxRetryInterval);
+    else if (typeof maxRetryInterval === 'string' && maxRetryInterval.trim())
+      next.maxRetryInterval = maxRetryInterval.trim();
+
+    const quotaSwitchProject = getYamlScalarAtPath(yamlText, ['quota-exceeded', 'switch-project']);
+    if (typeof quotaSwitchProject === 'boolean') next.quotaSwitchProject = quotaSwitchProject;
+    const quotaSwitchPreviewModel = getYamlScalarAtPath(yamlText, [
+      'quota-exceeded',
+      'switch-preview-model',
+    ]);
+    if (typeof quotaSwitchPreviewModel === 'boolean')
+      next.quotaSwitchPreviewModel = quotaSwitchPreviewModel;
+
+    const routingStrategy = getYamlScalarAtPath(yamlText, ['routing', 'strategy']);
+    if (routingStrategy === 'round-robin' || routingStrategy === 'fill-first')
+      next.routingStrategy = routingStrategy;
+
+    const wsAuth = getYamlScalarAtPath(yamlText, ['ws-auth']);
+    if (typeof wsAuth === 'boolean') next.wsAuth = wsAuth;
+
+    const ampComment = extractYamlCommentSection(
+      yamlText,
+      '# Amp Integration',
+      '# Global OAuth model name mappings (per channel)',
+      { includeMarkers: false }
+    );
+    const ampDoc = hasYamlTopLevelKey(yamlText, 'ampcode')
+      ? yamlText
+      : normalizeYamlSnippetToRoot(ampComment, 'ampcode');
+    if (ampDoc.trim()) {
+      const upstreamUrl = getYamlScalarAtPath(ampDoc, ['ampcode', 'upstream-url']);
+      if (typeof upstreamUrl === 'string') next.ampUpstreamUrl = upstreamUrl;
+      const upstreamApiKey = getYamlScalarAtPath(ampDoc, ['ampcode', 'upstream-api-key']);
+      if (typeof upstreamApiKey === 'string') next.ampUpstreamApiKey = upstreamApiKey;
+      const restrictLocalhost = getYamlScalarAtPath(ampDoc, [
+        'ampcode',
+        'restrict-management-to-localhost',
+      ]);
+      if (typeof restrictLocalhost === 'boolean')
+        next.ampRestrictManagementToLocalhost = restrictLocalhost;
+      const forceMappings = getYamlScalarAtPath(ampDoc, ['ampcode', 'force-model-mappings']);
+      if (typeof forceMappings === 'boolean') next.ampForceModelMappings = forceMappings;
+
+      const modelMappings = getYamlObjectArrayAtPath(ampDoc, ['ampcode', 'model-mappings']) || [];
+      const mappingEntries = modelMappings
+        .map((item) => ({
+          id: makeClientId(),
+          from: typeof item?.from === 'string' ? item.from : '',
+          to: typeof item?.to === 'string' ? item.to : '',
+        }))
+        .filter((m) => m.from.trim() || m.to.trim());
+      if (mappingEntries.length) {
+        next.ampModelMappings = mappingEntries;
+      }
+    }
+
+    const oauthComment = extractYamlCommentSection(
+      yamlText,
+      '# Global OAuth model name mappings (per channel)',
+      '# OAuth provider excluded models',
+      { includeMarkers: false }
+    );
+    const oauthDoc = hasYamlTopLevelKey(yamlText, 'oauth-model-mappings')
+      ? yamlText
+      : normalizeYamlSnippetToRoot(oauthComment, 'oauth-model-mappings');
+    if (oauthDoc.trim()) {
+      const channels = listYamlMapKeysAtPath(oauthDoc, ['oauth-model-mappings']);
+      next.oauthModelMappings = channels.map((channel) => {
+        const items = getYamlObjectArrayAtPath(oauthDoc, ['oauth-model-mappings', channel]) || [];
+        const entries = items
+          .map((item) => ({
+            id: makeClientId(),
+            name: typeof item?.name === 'string' ? item.name : '',
+            alias: typeof item?.alias === 'string' ? item.alias : '',
+            fork: typeof item?.fork === 'boolean' ? item.fork : false,
+          }))
+          .filter((m) => m.name.trim() || m.alias.trim());
+        return {
+          id: makeClientId(),
+          channel,
+          originalChannel: channel,
+          entries: entries.length
+            ? entries
+            : [{ id: makeClientId(), name: '', alias: '', fork: false }],
+        };
+      });
+    }
+
+    // Payload parsing
+    const payloadDefaultRaw = getYamlObjectArrayAtPath(yamlText, ['payload', 'default']) || [];
+    if (payloadDefaultRaw.length) {
+      next.payloadDefaultRules = parsePayloadRules(payloadDefaultRaw);
+    }
+    const payloadOverrideRaw = getYamlObjectArrayAtPath(yamlText, ['payload', 'override']) || [];
+    if (payloadOverrideRaw.length) {
+      next.payloadOverrideRules = parsePayloadRules(payloadOverrideRaw);
+    }
+
+    setVisualValues(next);
+    setVisualInitial(next);
+  }, []);
+
+  const buildVisualPatches = useCallback(
+    (yamlText: string) => {
+      const patches: Parameters<typeof applyYamlPatches>[1] = [];
+
+      const pushString = (
+        path: string[],
+        current: string,
+        initial: string,
+        { force = false } = {}
+      ) => {
+        if (!force && current === initial) return;
+        patches.push({ path, type: 'string', value: current });
+      };
+
+      const pushNumber = (
+        path: string[],
+        current: string,
+        initial: string,
+        { force = false } = {}
+      ) => {
+        if (!force && current === initial) return;
+        const trimmed = current.trim();
+        if (!trimmed) return;
+        const num = Number(trimmed);
+        if (!Number.isFinite(num)) return;
+        patches.push({ path, type: 'number', value: num });
+      };
+
+      const pushBoolean = (
+        path: string[],
+        current: boolean,
+        initial: boolean,
+        { force = false } = {}
+      ) => {
+        if (!force && current === initial) return;
+        patches.push({ path, type: 'boolean', value: current });
+      };
+
+      const pushStringArrayText = (
+        path: string[],
+        currentText: string,
+        initialText: string,
+        { force = false } = {}
+      ) => {
+        if (!force && currentText === initialText) return;
+        const list = String(currentText || '')
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+        patches.push({ path, type: 'stringArray', value: list });
+      };
+
+      const pushEnum = (
+        path: string[],
+        current: VisualConfigValues['routingStrategy'],
+        initial: VisualConfigValues['routingStrategy']
+      ) => {
+        if (current === initial) return;
+        patches.push({ path, type: 'enum', value: current });
+      };
+
+      pushString(['host'], visualValues.host, visualInitial.host);
+      pushNumber(['port'], visualValues.port, visualInitial.port);
+
+      pushBoolean(['tls', 'enable'], visualValues.tlsEnable, visualInitial.tlsEnable);
+      pushString(['tls', 'cert'], visualValues.tlsCert, visualInitial.tlsCert);
+      pushString(['tls', 'key'], visualValues.tlsKey, visualInitial.tlsKey);
+
+      pushBoolean(
+        ['remote-management', 'allow-remote'],
+        visualValues.rmAllowRemote,
+        visualInitial.rmAllowRemote
+      );
+      pushString(
+        ['remote-management', 'secret-key'],
+        visualValues.rmSecretKey,
+        visualInitial.rmSecretKey
+      );
+      pushBoolean(
+        ['remote-management', 'disable-control-panel'],
+        visualValues.rmDisableControlPanel,
+        visualInitial.rmDisableControlPanel
+      );
+      pushString(
+        ['remote-management', 'panel-github-repository'],
+        visualValues.rmPanelRepo,
+        visualInitial.rmPanelRepo
+      );
+
+      pushString(['auth-dir'], visualValues.authDir, visualInitial.authDir);
+      pushStringArrayText(['api-keys'], visualValues.apiKeysText, visualInitial.apiKeysText);
+
+      pushBoolean(['debug'], visualValues.debug, visualInitial.debug);
+      pushBoolean(['commercial-mode'], visualValues.commercialMode, visualInitial.commercialMode);
+      pushBoolean(['logging-to-file'], visualValues.loggingToFile, visualInitial.loggingToFile);
+      pushNumber(
+        ['logs-max-total-size-mb'],
+        visualValues.logsMaxTotalSizeMb,
+        visualInitial.logsMaxTotalSizeMb
+      );
+      pushBoolean(
+        ['usage-statistics-enabled'],
+        visualValues.usageStatisticsEnabled,
+        visualInitial.usageStatisticsEnabled
+      );
+
+      pushString(['proxy-url'], visualValues.proxyUrl, visualInitial.proxyUrl);
+      pushBoolean(
+        ['force-model-prefix'],
+        visualValues.forceModelPrefix,
+        visualInitial.forceModelPrefix
+      );
+      pushNumber(['request-retry'], visualValues.requestRetry, visualInitial.requestRetry);
+      pushNumber(
+        ['max-retry-interval'],
+        visualValues.maxRetryInterval,
+        visualInitial.maxRetryInterval
+      );
+
+      pushBoolean(
+        ['quota-exceeded', 'switch-project'],
+        visualValues.quotaSwitchProject,
+        visualInitial.quotaSwitchProject
+      );
+      pushBoolean(
+        ['quota-exceeded', 'switch-preview-model'],
+        visualValues.quotaSwitchPreviewModel,
+        visualInitial.quotaSwitchPreviewModel
+      );
+
+      pushEnum(
+        ['routing', 'strategy'],
+        visualValues.routingStrategy,
+        visualInitial.routingStrategy
+      );
+      pushBoolean(['ws-auth'], visualValues.wsAuth, visualInitial.wsAuth);
+
+      const ampMappingsNow = (visualValues.ampModelMappings || [])
+        .map((m) => ({ from: m.from.trim(), to: m.to.trim() }))
+        .filter((m) => m.from && m.to);
+      const ampMappingsInitial = (visualInitial.ampModelMappings || [])
+        .map((m) => ({ from: m.from.trim(), to: m.to.trim() }))
+        .filter((m) => m.from && m.to);
+      const ampMappingsChanged =
+        JSON.stringify(ampMappingsNow) !== JSON.stringify(ampMappingsInitial);
+      const ampUpstreamUrl = visualValues.ampUpstreamUrl.trim();
+      const ampUpstreamApiKey = visualValues.ampUpstreamApiKey.trim();
+      const ampHasContent =
+        !!ampUpstreamUrl ||
+        !!ampUpstreamApiKey ||
+        visualValues.ampRestrictManagementToLocalhost ||
+        visualValues.ampForceModelMappings ||
+        ampMappingsNow.length > 0;
+
+      if (ampHasContent) {
+        pushString(
+          ['ampcode', 'upstream-url'],
+          visualValues.ampUpstreamUrl,
+          visualInitial.ampUpstreamUrl
+        );
+        pushString(
+          ['ampcode', 'upstream-api-key'],
+          visualValues.ampUpstreamApiKey,
+          visualInitial.ampUpstreamApiKey
+        );
+        pushBoolean(
+          ['ampcode', 'restrict-management-to-localhost'],
+          visualValues.ampRestrictManagementToLocalhost,
+          visualInitial.ampRestrictManagementToLocalhost
+        );
+        pushBoolean(
+          ['ampcode', 'force-model-mappings'],
+          visualValues.ampForceModelMappings,
+          visualInitial.ampForceModelMappings
+        );
+
+        if (ampMappingsChanged) {
+          patches.push({
+            path: ['ampcode', 'model-mappings'],
+            type: 'objectArray',
+            value: ampMappingsNow.map((m) => ({ from: m.from, to: m.to })),
+            itemKeyOrder: ['from', 'to'],
+          });
+        }
+      }
+
+      const normalizeOauthEntries = (entries: OauthModelMappingEntry[]) =>
+        (entries || [])
+          .map((e) => ({ name: e.name.trim(), alias: e.alias.trim(), fork: !!e.fork }))
+          .filter((e) => e.name);
+
+      const oauthHasRoot = hasYamlTopLevelKey(yamlText, 'oauth-model-mappings');
+
+      const rows = (visualValues.oauthModelMappings || []).map((row) => {
+        const currentChannel = row.channel.trim();
+        const originalChannel = (row.originalChannel || row.channel).trim();
+        return {
+          currentChannel,
+          originalChannel,
+          currentKey: currentChannel.toLowerCase(),
+          originalKey: originalChannel.toLowerCase(),
+          entries: normalizeOauthEntries(row.entries),
+        };
+      });
+
+      const initialRows = (visualInitial.oauthModelMappings || []).map((row) => {
+        const originalChannel = (row.originalChannel || row.channel).trim();
+        return {
+          originalChannel,
+          originalKey: originalChannel.toLowerCase(),
+          entries: normalizeOauthEntries(row.entries),
+        };
+      });
+
+      const nowHasAny = rows.some((r) => r.currentKey && r.entries.length > 0);
+      const nowHasAnyChannel = rows.some((r) => r.currentKey);
+      const initialHasAnyChannel = initialRows.some((r) => r.originalKey);
+
+      const toObjectArray = (entries: Array<{ name: string; alias: string; fork: boolean }>) =>
+        entries.map((e) => {
+          const obj: Record<string, unknown> = { name: e.name };
+          if (e.alias && e.alias !== e.name) obj.alias = e.alias;
+          if (e.fork) obj.fork = true;
+          return obj;
+        });
+
+      if (oauthHasRoot || nowHasAny || initialHasAnyChannel) {
+        const initialEntriesByKey = new Map(
+          initialRows.map((r) => [r.originalKey, r.entries] as const).filter(([k]) => !!k)
+        );
+
+        const referencedOriginalKeys = new Set<string>();
+        const writtenCurrentKeys = new Set<string>();
+
+        rows.forEach((r) => {
+          const initialEntries = initialEntriesByKey.get(r.originalKey) || [];
+          const initialHadChannel = initialEntriesByKey.has(r.originalKey);
+          const initialHadEntries = initialEntries.length > 0;
+          const channelRenamed =
+            initialHadChannel && !!r.currentKey && r.originalKey && r.originalKey !== r.currentKey;
+
+          const keepInitialEmptyChannel =
+            initialHadChannel &&
+            !initialHadEntries &&
+            !r.entries.length &&
+            !!r.currentKey &&
+            r.currentKey === r.originalKey;
+
+          if (keepInitialEmptyChannel) {
+            referencedOriginalKeys.add(r.originalKey);
+            return;
+          }
+
+          if (!r.currentChannel) return;
+          if (!r.entries.length) return;
+          if (writtenCurrentKeys.has(r.currentKey)) {
+            if (initialHadChannel) referencedOriginalKeys.add(r.originalKey);
+            return;
+          }
+          writtenCurrentKeys.add(r.currentKey);
+
+          if (initialHadChannel) referencedOriginalKeys.add(r.originalKey);
+          const entriesChanged = JSON.stringify(r.entries) !== JSON.stringify(initialEntries);
+
+          if (entriesChanged || channelRenamed || !oauthHasRoot) {
+            patches.push({
+              path: ['oauth-model-mappings', r.currentChannel],
+              type: 'objectArray',
+              value: toObjectArray(r.entries),
+              itemKeyOrder: ['name', 'alias', 'fork'],
+            });
+          }
+
+          if (channelRenamed) {
+            patches.push({
+              path: ['oauth-model-mappings', r.originalChannel],
+              type: 'delete',
+            });
+          }
+        });
+
+        initialRows.forEach((r) => {
+          if (!r.originalChannel) return;
+          if (!r.originalKey) return;
+          if (referencedOriginalKeys.has(r.originalKey)) return;
+          patches.push({
+            path: ['oauth-model-mappings', r.originalChannel],
+            type: 'delete',
+          });
+        });
+
+        if (!nowHasAnyChannel && initialHasAnyChannel && oauthHasRoot) {
+          patches.push({ path: ['oauth-model-mappings'], type: 'delete' });
+        }
+      }
+
+      const wroteAmpcode = patches.some((p) => p.path[0] === 'ampcode');
+      const wroteOauth = patches.some((p) => p.path[0] === 'oauth-model-mappings');
+      const shouldStripAmpComment = wroteAmpcode;
+      const shouldStripOauthComment = wroteOauth && nowHasAny;
+
+      // Payload write logic
+      const payloadDefaultNow = serializePayloadRules(visualValues.payloadDefaultRules || []);
+      const payloadOverrideNow = serializePayloadRules(visualValues.payloadOverrideRules || []);
+      const payloadDefaultInit = serializePayloadRules(visualInitial.payloadDefaultRules || []);
+      const payloadOverrideInit = serializePayloadRules(visualInitial.payloadOverrideRules || []);
+
+      const payloadHasContent = payloadDefaultNow.length > 0 || payloadOverrideNow.length > 0;
+      const payloadHadContent = payloadDefaultInit.length > 0 || payloadOverrideInit.length > 0;
+      const payloadDefaultChanged =
+        JSON.stringify(payloadDefaultNow) !== JSON.stringify(payloadDefaultInit);
+      const payloadOverrideChanged =
+        JSON.stringify(payloadOverrideNow) !== JSON.stringify(payloadOverrideInit);
+
+      const shouldStripPayloadComment = payloadHasContent;
+
+      if (payloadHasContent) {
+        if (payloadDefaultChanged) {
+          if (payloadDefaultNow.length > 0) {
+            patches.push({
+              path: ['payload', 'default'],
+              type: 'objectArray',
+              value: payloadDefaultNow,
+              itemKeyOrder: ['models', 'params'],
+            });
+          } else {
+            patches.push({ path: ['payload', 'default'], type: 'delete' });
+          }
+        }
+        if (payloadOverrideChanged) {
+          if (payloadOverrideNow.length > 0) {
+            patches.push({
+              path: ['payload', 'override'],
+              type: 'objectArray',
+              value: payloadOverrideNow,
+              itemKeyOrder: ['models', 'params'],
+            });
+          } else {
+            patches.push({ path: ['payload', 'override'], type: 'delete' });
+          }
+        }
+      } else if (payloadHadContent) {
+        // Was content before, now empty -> delete payload entirely
+        patches.push({ path: ['payload'], type: 'delete' });
+      }
+
+      return { patches, shouldStripAmpComment, shouldStripOauthComment, shouldStripPayloadComment };
+    },
+    [visualInitial, visualValues]
+  );
+
+  const applyVisualChangesToYaml = useCallback(
+    (yamlText: string) => {
+      const { patches, shouldStripAmpComment, shouldStripOauthComment, shouldStripPayloadComment } =
+        buildVisualPatches(yamlText);
+      if (
+        !patches.length &&
+        !shouldStripAmpComment &&
+        !shouldStripOauthComment &&
+        !shouldStripPayloadComment
+      )
+        return yamlText;
+
+      let updated = yamlText;
+      if (patches.length) {
+        updated = applyYamlPatches(updated, patches);
+      }
+      if (shouldStripAmpComment) {
+        updated = removeYamlCommentSectionByMarkers(
+          updated,
+          '# Amp Integration',
+          '# Global OAuth model name mappings (per channel)'
+        );
+      }
+      if (shouldStripOauthComment) {
+        updated = removeYamlCommentSectionByMarkers(
+          updated,
+          '# Global OAuth model name mappings (per channel)',
+          '# OAuth provider excluded models'
+        );
+      }
+      if (shouldStripPayloadComment) {
+        updated = removeYamlCommentSectionByMarkers(
+          updated,
+          '# Optional payload configuration',
+          undefined
+        );
+      }
+      return updated;
+    },
+    [buildVisualPatches]
+  );
+
+  const visualDirty = useMemo(() => {
+    const a = visualValues;
+    const b = visualInitial;
+    if (a.host !== b.host) return true;
+    if (a.port !== b.port) return true;
+    if (a.tlsEnable !== b.tlsEnable) return true;
+    if (a.tlsCert !== b.tlsCert) return true;
+    if (a.tlsKey !== b.tlsKey) return true;
+    if (a.rmAllowRemote !== b.rmAllowRemote) return true;
+    if (a.rmSecretKey !== b.rmSecretKey) return true;
+    if (a.rmDisableControlPanel !== b.rmDisableControlPanel) return true;
+    if (a.rmPanelRepo !== b.rmPanelRepo) return true;
+    if (a.authDir !== b.authDir) return true;
+    if (a.apiKeysText !== b.apiKeysText) return true;
+    if (a.debug !== b.debug) return true;
+    if (a.commercialMode !== b.commercialMode) return true;
+    if (a.loggingToFile !== b.loggingToFile) return true;
+    if (a.logsMaxTotalSizeMb !== b.logsMaxTotalSizeMb) return true;
+    if (a.usageStatisticsEnabled !== b.usageStatisticsEnabled) return true;
+    if (a.proxyUrl !== b.proxyUrl) return true;
+    if (a.forceModelPrefix !== b.forceModelPrefix) return true;
+    if (a.requestRetry !== b.requestRetry) return true;
+    if (a.maxRetryInterval !== b.maxRetryInterval) return true;
+    if (a.quotaSwitchProject !== b.quotaSwitchProject) return true;
+    if (a.quotaSwitchPreviewModel !== b.quotaSwitchPreviewModel) return true;
+    if (a.routingStrategy !== b.routingStrategy) return true;
+    if (a.wsAuth !== b.wsAuth) return true;
+
+    const ampNow = (a.ampModelMappings || [])
+      .map((m) => ({ from: m.from.trim(), to: m.to.trim() }))
+      .filter((m) => m.from && m.to);
+    const ampHasContent =
+      !!a.ampUpstreamUrl.trim() ||
+      !!a.ampUpstreamApiKey.trim() ||
+      a.ampRestrictManagementToLocalhost ||
+      a.ampForceModelMappings ||
+      ampNow.length > 0;
+    const ampInit = (b.ampModelMappings || [])
+      .map((m) => ({ from: m.from.trim(), to: m.to.trim() }))
+      .filter((m) => m.from && m.to);
+    const ampInitHasContent =
+      !!b.ampUpstreamUrl.trim() ||
+      !!b.ampUpstreamApiKey.trim() ||
+      b.ampRestrictManagementToLocalhost ||
+      b.ampForceModelMappings ||
+      ampInit.length > 0;
+    if (ampHasContent || ampInitHasContent) {
+      if (a.ampUpstreamUrl !== b.ampUpstreamUrl) return true;
+      if (a.ampUpstreamApiKey !== b.ampUpstreamApiKey) return true;
+      if (a.ampRestrictManagementToLocalhost !== b.ampRestrictManagementToLocalhost) return true;
+      if (a.ampForceModelMappings !== b.ampForceModelMappings) return true;
+      if (JSON.stringify(ampNow) !== JSON.stringify(ampInit)) return true;
+    }
+
+    const oauthInitialKeys = new Set(
+      (b.oauthModelMappings || [])
+        .map((ch) => (ch.originalChannel || ch.channel).trim().toLowerCase())
+        .filter(Boolean)
+    );
+
+    const normalizeOauth = (channels: OauthChannelMappings[]) =>
+      (channels || [])
+        .map((ch) => {
+          const channel = ch.channel.trim();
+          const originalChannel = (ch.originalChannel || channel).trim();
+          const entries = (ch.entries || [])
+            .map((e) => ({ name: e.name.trim(), alias: e.alias.trim(), fork: !!e.fork }))
+            .filter((e) => e.name);
+
+          return {
+            channel,
+            originalChannel,
+            originalKey: originalChannel.toLowerCase(),
+            entries,
+          };
+        })
+        .filter((ch) => {
+          if (!ch.channel && !ch.originalChannel) return false;
+          if (ch.entries.length) return !!ch.channel;
+          if (!ch.originalKey) return false;
+          return oauthInitialKeys.has(ch.originalKey);
+        })
+        .map(({ channel, originalChannel, entries }) => ({ channel, originalChannel, entries }));
+
+    const oauthNow = normalizeOauth(a.oauthModelMappings);
+    const oauthInit = normalizeOauth(b.oauthModelMappings);
+    if (oauthNow.length || oauthInit.length) {
+      if (JSON.stringify(oauthNow) !== JSON.stringify(oauthInit)) return true;
+    }
+
+    // Payload dirty check
+    const payloadDefaultNow = serializePayloadRules(a.payloadDefaultRules || []);
+    const payloadOverrideNow = serializePayloadRules(a.payloadOverrideRules || []);
+    const payloadDefaultInit = serializePayloadRules(b.payloadDefaultRules || []);
+    const payloadOverrideInit = serializePayloadRules(b.payloadOverrideRules || []);
+    if (JSON.stringify(payloadDefaultNow) !== JSON.stringify(payloadDefaultInit)) return true;
+    if (JSON.stringify(payloadOverrideNow) !== JSON.stringify(payloadOverrideInit)) return true;
+
+    return false;
+  }, [visualInitial, visualValues]);
+
+  return {
+    visualValues,
+    setVisualValues,
+    visualInitial,
+    loadVisualValuesFromYaml,
+    applyVisualChangesToYaml,
+    visualDirty,
+  };
+}
