@@ -48,6 +48,7 @@ const sidebarIcons: Record<string, ReactNode> = {
   oauth: <IconShield size={18} />,
   quota: <IconTimer size={18} />,
   usage: <IconChartLine size={18} />,
+  usageRecords: <IconScrollText size={18} />,
   config: <IconSettings size={18} />,
   backup: <IconInbox size={18} />,
   logs: <IconScrollText size={18} />,
@@ -366,6 +367,7 @@ export function MainLayout() {
     { path: '/oauth', label: t('nav.oauth', { defaultValue: 'OAuth' }), icon: sidebarIcons.oauth },
     { path: '/quota', label: t('nav.quota_management'), icon: sidebarIcons.quota },
     { path: '/usage', label: t('nav.usage_stats'), icon: sidebarIcons.usage },
+    { path: '/usage-records', label: t('nav.usage_records', { defaultValue: '使用记录' }), icon: sidebarIcons.usageRecords },
     { path: '/config', label: t('nav.config_management'), icon: sidebarIcons.config },
     { path: '/backup', label: t('nav.backup_management'), icon: sidebarIcons.backup },
     ...(config?.loggingToFile

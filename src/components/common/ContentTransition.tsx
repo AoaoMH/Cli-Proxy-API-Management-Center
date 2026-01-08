@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState, useEffect } from 'react';
 import gsap from 'gsap';
 import './ContentTransition.scss';
 
@@ -32,66 +32,100 @@ export function ContentTransition({
 }) {
   const currentLayerRef = useRef<HTMLDivElement>(null);
   const exitingLayerRef = useRef<HTMLDivElement>(null);
+  
+  const prevKeyRef = useRef<string>(transitionKey);
+  const prevChildrenRef = useRef<ReactNode>(children);
 
   const [isAnimating, setIsAnimating] = useState(false);
   const [transitionDirection, setTransitionDirection] = useState<TransitionDirection>('forward');
-  const [layers, setLayers] = useState<Layer[]>(() => [
-    { key: transitionKey, node: children, status: 'current' },
-  ]);
-  const currentLayerKey = layers[layers.length - 1]?.key ?? transitionKey;
+  
+  const [layers, setLayers] = useState<Layer[]>(() => [{
+    key: transitionKey,
+    node: children,
+    status: 'current',
+  }]);
 
   useEffect(() => {
-    if (isAnimating) return;
-
-    if (transitionKey === currentLayerKey) {
-      setLayers([{ key: transitionKey, node: children, status: 'current' }]);
+    // If key hasn't changed, just keep tracking the latest children
+    if (transitionKey === prevKeyRef.current) {
+      prevChildrenRef.current = children;
       return;
     }
+    
+    // If animating, we wait for it to finish.
+    // The previous logic ignored updates during animation, so we do the same here.
+    if (isAnimating) {
+      return;
+    }
+
+    const fromKey = prevKeyRef.current;
+    const toKey = transitionKey;
+    const fromNode = prevChildrenRef.current;
 
     const resolveOrderIndex = (key: string) => {
       if (!getOrder) return null;
       const index = getOrder(key);
       return typeof index === 'number' && index >= 0 ? index : null;
     };
-    const fromIndex = resolveOrderIndex(currentLayerKey);
-    const toIndex = resolveOrderIndex(transitionKey);
+
+    const fromIndex = resolveOrderIndex(fromKey);
+    const toIndex = resolveOrderIndex(toKey);
     const nextDirection: TransitionDirection =
       fromIndex === null || toIndex === null || fromIndex === toIndex
         ? 'forward'
         : toIndex > fromIndex
           ? 'forward'
           : 'backward';
-    setTransitionDirection(nextDirection);
+    
+    let cancelled = false;
 
-    setLayers((prev) => {
-      const prevCurrent = prev[prev.length - 1];
-      return [
-        prevCurrent
-          ? { ...prevCurrent, status: 'exiting' }
-          : { key: transitionKey, node: children, status: 'exiting' },
-        { key: transitionKey, node: children, status: 'current' },
-      ];
+    queueMicrotask(() => {
+      if (cancelled) return;
+      
+      setTransitionDirection(nextDirection);
+      setLayers([
+        {
+          key: fromKey,
+          node: fromNode,
+          status: 'exiting',
+        },
+        {
+          key: toKey,
+          node: children,
+          status: 'current',
+        },
+      ]);
+      setIsAnimating(true);
     });
-    setIsAnimating(true);
-  }, [children, currentLayerKey, getOrder, isAnimating, transitionKey]);
+    
+    prevKeyRef.current = transitionKey;
+    prevChildrenRef.current = children;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [transitionKey, children, isAnimating, getOrder]);
 
   useLayoutEffect(() => {
     if (!isAnimating) return;
     if (!currentLayerRef.current) return;
+
+    const currentEl = currentLayerRef.current;
+    const exitingEl = exitingLayerRef.current;
 
     const enterFromX = transitionDirection === 'forward' ? travel : -travel;
     const exitToX = transitionDirection === 'forward' ? -travel : travel;
 
     const tl = gsap.timeline({
       onComplete: () => {
-        setLayers((prev) => prev.filter((layer) => layer.status !== 'exiting'));
+        setLayers((prev) => prev.filter((l) => l.status === 'current'));
         setIsAnimating(false);
       },
     });
 
-    if (exitingLayerRef.current) {
+    if (exitingEl) {
       tl.fromTo(
-        exitingLayerRef.current,
+        exitingEl,
         { x: 0, opacity: 1 },
         {
           x: exitToX,
@@ -105,7 +139,7 @@ export function ContentTransition({
     }
 
     tl.fromTo(
-      currentLayerRef.current,
+      currentEl,
       { x: enterFromX, opacity: 0 },
       {
         x: 0,
@@ -120,9 +154,17 @@ export function ContentTransition({
 
     return () => {
       tl.kill();
-      gsap.killTweensOf([currentLayerRef.current, exitingLayerRef.current]);
+      gsap.killTweensOf([currentEl, exitingEl]);
     };
   }, [isAnimating, travel, transitionDirection]);
+
+  // Live-patch the current layer with latest children to ensure instant updates
+  const layersToRender = layers.map(layer => {
+    if (layer.status === 'current' && layer.key === transitionKey) {
+      return { ...layer, node: children };
+    }
+    return layer;
+  });
 
   return (
     <div
@@ -134,7 +176,7 @@ export function ContentTransition({
         .filter(Boolean)
         .join(' ')}
     >
-      {layers.map((layer) => (
+      {layersToRender.map((layer) => (
         <div
           key={`${layer.key}:${layer.status}`}
           className={`content-transition__layer${
@@ -148,4 +190,3 @@ export function ContentTransition({
     </div>
   );
 }
-

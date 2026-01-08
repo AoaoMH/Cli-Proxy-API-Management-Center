@@ -26,10 +26,18 @@ const getSystemTheme = (): ResolvedTheme => {
 };
 
 const applyTheme = (resolved: ResolvedTheme) => {
-  if (resolved === 'dark') {
-    document.documentElement.setAttribute('data-theme', 'dark');
+  // Force a synchronous DOM update by reading and writing the attribute
+  const currentTheme = document.documentElement.getAttribute('data-theme');
+  const targetTheme = resolved === 'dark' ? 'dark' : null;
+  
+  if (targetTheme === 'dark') {
+    if (currentTheme !== 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
   } else {
-    document.documentElement.removeAttribute('data-theme');
+    if (currentTheme !== null) {
+      document.documentElement.removeAttribute('data-theme');
+    }
   }
 };
 
@@ -41,23 +49,29 @@ export const useThemeStore = create<ThemeState>()(
 
       setTheme: (theme) => {
         const resolved: ResolvedTheme = theme === 'auto' ? getSystemTheme() : theme;
+        // Apply theme to DOM first, then update state
         applyTheme(resolved);
         set({ theme, resolvedTheme: resolved });
       },
 
       cycleTheme: () => {
-        const { theme, setTheme } = get();
+        const { theme } = get();
         const order: Theme[] = ['light', 'dark', 'auto'];
         const currentIndex = order.indexOf(theme);
         const nextTheme = order[(currentIndex + 1) % order.length];
-        setTheme(nextTheme);
+        // Directly apply the new theme instead of calling setTheme via get()
+        const resolved: ResolvedTheme = nextTheme === 'auto' ? getSystemTheme() : nextTheme;
+        applyTheme(resolved);
+        set({ theme: nextTheme, resolvedTheme: resolved });
       },
 
       initializeTheme: () => {
-        const { theme, setTheme } = get();
+        const { theme } = get();
 
         // 应用已保存的主题
-        setTheme(theme);
+        const resolved: ResolvedTheme = theme === 'auto' ? getSystemTheme() : theme;
+        applyTheme(resolved);
+        set({ resolvedTheme: resolved });
 
         // 监听系统主题变化（仅在 auto 模式下生效）
         if (!window.matchMedia) {
@@ -68,9 +82,9 @@ export const useThemeStore = create<ThemeState>()(
         const listener = () => {
           const { theme: currentTheme } = get();
           if (currentTheme === 'auto') {
-            const resolved = getSystemTheme();
-            applyTheme(resolved);
-            set({ resolvedTheme: resolved });
+            const newResolved = getSystemTheme();
+            applyTheme(newResolved);
+            set({ resolvedTheme: newResolved });
           }
         };
 
@@ -81,6 +95,13 @@ export const useThemeStore = create<ThemeState>()(
     }),
     {
       name: STORAGE_KEY_THEME,
+      onRehydrateStorage: () => (state) => {
+        // Apply theme immediately after rehydration from localStorage
+        if (state) {
+          const resolved: ResolvedTheme = state.theme === 'auto' ? getSystemTheme() : state.theme;
+          applyTheme(resolved);
+        }
+      },
     }
   )
 );

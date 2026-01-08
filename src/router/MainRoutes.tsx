@@ -7,6 +7,7 @@ import { AuthFilesPage } from '@/pages/AuthFilesPage';
 import { OAuthPage } from '@/pages/OAuthPage';
 import { QuotaPage } from '@/pages/QuotaPage';
 import { UsagePage } from '@/pages/UsagePage';
+import { UsageRecordsPage } from '@/pages/UsageRecordsPage';
 import { ConfigPage } from '@/pages/ConfigPage';
 import { LogsPage } from '@/pages/LogsPage';
 import { SystemPage } from '@/pages/SystemPage';
@@ -22,6 +23,7 @@ const mainRoutes = [
   { path: '/oauth', element: <OAuthPage /> },
   { path: '/quota', element: <QuotaPage /> },
   { path: '/usage', element: <UsagePage /> },
+  { path: '/usage-records', element: <UsageRecordsPage /> },
   { path: '/config', element: <ConfigPage /> },
   { path: '/backup', element: <BackupPage /> },
   { path: '/logs', element: <LogsPage /> },
@@ -32,3 +34,4 @@ const mainRoutes = [
 export function MainRoutes({ location }: { location?: Location }) {
   return useRoutes(mainRoutes, location);
 }
+

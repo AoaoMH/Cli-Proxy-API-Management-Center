@@ -106,6 +106,10 @@ export function PageTransition({
 
     if (!currentLayerRef.current) return;
 
+    // Capture refs at effect start
+    const currentEl = currentLayerRef.current;
+    const exitingEl = exitingLayerRef.current;
+
     const scrollContainer = resolveScrollContainer();
     const scrollOffset = exitScrollOffsetRef.current;
     if (scrollContainer && scrollOffset > 0) {
@@ -127,10 +131,10 @@ export function PageTransition({
     });
 
     // Exit animation: fly out to top (slow-to-fast)
-    if (exitingLayerRef.current) {
-      gsap.set(exitingLayerRef.current, { y: exitBaseY });
+    if (exitingEl) {
+      gsap.set(exitingEl, { y: exitBaseY });
       tl.fromTo(
-        exitingLayerRef.current,
+        exitingEl,
         { y: exitBaseY, opacity: 1 },
         {
           y: exitBaseY + exitToY,
@@ -145,7 +149,7 @@ export function PageTransition({
 
     // Enter animation: slide in from bottom (slow-to-fast)
     tl.fromTo(
-      currentLayerRef.current,
+      currentEl,
       { y: enterFromY, opacity: 0 },
       {
         y: 0,
@@ -160,7 +164,7 @@ export function PageTransition({
 
     return () => {
       tl.kill();
-      gsap.killTweensOf([currentLayerRef.current, exitingLayerRef.current]);
+      gsap.killTweensOf([currentEl, exitingEl]);
     };
   }, [isAnimating, transitionDirection, resolveScrollContainer]);
 

@@ -1,0 +1,131 @@
+@use '../../styles/variables.scss' as *;
+
+.select-container {
+  position: relative;
+  display: inline-flex;
+  min-width: 100px;
+
+  &.disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  &.select-sm {
+    .select-trigger {
+      height: 32px;
+      padding: 0 10px;
+      font-size: 12px;
+    }
+  }
+
+  &.select-md {
+    .select-trigger {
+      height: 36px;
+      padding: 0 12px;
+      font-size: 13px;
+    }
+  }
+}
+
+.select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+  width: 100%;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: border-color $transition-fast, box-shadow $transition-fast;
+
+  &:hover:not(:disabled) {
+    border-color: var(--border-hover);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  }
+}
+
+.select-value {
+  flex: 1;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  &.placeholder {
+    color: var(--text-secondary);
+  }
+}
+
+.select-icon {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  transition: transform $transition-fast;
+
+  .open & {
+    transform: rotate(180deg);
+  }
+}
+
+.select-content {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: $z-dropdown;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  box-shadow: $shadow-lg;
+  max-height: 240px;
+  overflow-y: auto;
+  animation: select-slide-down 0.15s ease-out;
+}
+
+@keyframes select-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.select-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 13px;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background-color $transition-fast;
+
+  &:hover {
+    background: var(--bg-secondary);
+  }
+
+  &.selected {
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--primary-color);
+    font-weight: 500;
+  }
+
+  &:first-child {
+    border-radius: $radius-md $radius-md 0 0;
+  }
+
+  &:last-child {
+    border-radius: 0 0 $radius-md $radius-md;
+  }
+}

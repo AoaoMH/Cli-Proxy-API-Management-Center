@@ -1,0 +1,246 @@
+@use '../styles/variables.scss' as *;
+
+.usage-records-page {
+  .page-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: $spacing-lg;
+  }
+
+  // Analytics Section
+  .analytics-section {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-md;
+    margin-bottom: $spacing-lg;
+  }
+
+  .analytics-row {
+    display: flex;
+    gap: $spacing-md;
+    flex-wrap: wrap;
+  }
+
+  .analytics-col {
+    flex: 1;
+    min-width: 300px;
+  }
+
+  .analytics-col-summary {
+    flex: 1;
+    min-width: 300px;
+  }
+
+  .analytics-col-heatmap {
+    flex: 2;
+    min-width: 400px;
+  }
+
+  .analytics-col-full {
+    flex: 1 1 100%;
+    min-width: 100%;
+  }
+
+  // Filter controls in header
+  .filter-select {
+    min-width: 120px;
+  }
+
+  .filter-separator {
+    display: none;
+    height: 16px;
+    width: 1px;
+    background: var(--border-color);
+
+    @media (min-width: 640px) {
+      display: block;
+    }
+  }
+
+  .refresh-btn {
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  // Table wrapper
+  .table-wrapper {
+    overflow-x: auto;
+  }
+
+  // Records table
+  .records-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+
+    th,
+    td {
+      padding: $spacing-sm $spacing-md;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    th {
+      background: var(--bg-secondary);
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+      height: 48px;
+    }
+
+    tbody tr {
+      cursor: pointer;
+      transition: background-color $transition-fast;
+      height: 64px;
+
+      &:hover {
+        background: var(--bg-secondary);
+      }
+    }
+
+    // Column widths
+    .col-time {
+      width: 130px;
+    }
+
+    .col-ip {
+      width: 120px;
+    }
+
+    .col-key {
+      width: 120px;
+    }
+
+    .col-model {
+      width: 180px;
+    }
+
+    .col-provider {
+      width: 100px;
+    }
+
+    .col-type {
+      width: 80px;
+      text-align: center;
+    }
+
+    .col-tokens {
+      width: 120px;
+      text-align: right;
+    }
+
+    .col-duration {
+      width: 80px;
+      text-align: right;
+    }
+
+    // Cell styles
+    .cell-time {
+      white-space: nowrap;
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+
+    .cell-ip {
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .cell-key {
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .cell-model {
+      font-weight: 500;
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .cell-provider {
+      color: var(--text-secondary);
+    }
+
+    .cell-type {
+      text-align: center;
+    }
+
+    .cell-tokens {
+      text-align: right;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+
+      .tokens-display {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 2px;
+      }
+
+      .tokens-main {
+        color: var(--text-primary);
+      }
+
+      .tokens-cache {
+        color: var(--text-secondary);
+        font-size: 11px;
+      }
+    }
+
+    .cell-duration {
+      text-align: right;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+
+      .duration-value {
+        color: var(--text-secondary);
+      }
+
+      .duration-active {
+        color: var(--primary-color);
+      }
+    }
+  }
+
+  // Spin animation for refresh icon
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .spin-animation {
+    animation: spin 1s linear infinite;
+  }
+}
+
+// Responsive adjustments
+@media (max-width: 768px) {
+  .usage-records-page {
+    .records-table {
+      font-size: 12px;
+
+      th,
+      td {
+        padding: $spacing-xs $spacing-sm;
+      }
+
+      .col-ip,
+      .col-key {
+        display: none;
+      }
+    }
+  }
+}

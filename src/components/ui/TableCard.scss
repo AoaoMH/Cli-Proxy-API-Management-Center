@@ -1,0 +1,51 @@
+@use '../../styles/variables.scss' as *;
+
+.table-card {
+  overflow: hidden;
+  padding: 0;
+
+  .table-card-header {
+    padding: $spacing-md $spacing-lg;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .table-card-header-content {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-md;
+
+    @media (min-width: 640px) {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+    }
+  }
+
+  .table-card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    flex-shrink: 0;
+
+    @media (min-width: 640px) {
+      font-size: 16px;
+    }
+  }
+
+  .table-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: $spacing-sm;
+  }
+
+  .table-card-body {
+    overflow-x: auto;
+  }
+
+  .table-card-pagination {
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+  }
+}

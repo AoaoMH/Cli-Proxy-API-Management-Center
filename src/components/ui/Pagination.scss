@@ -1,0 +1,67 @@
+@use '../../styles/variables.scss' as *;
+
+.pagination-container {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+  padding: $spacing-md $spacing-lg;
+
+  @media (min-width: 640px) {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.pagination-info {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+  align-items: flex-start;
+
+  @media (min-width: 640px) {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+.pagination-range {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+
+  .highlight {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+}
+
+.page-size-select {
+  min-width: 120px;
+}
+
+.pagination-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-xs;
+
+  @media (min-width: 640px) {
+    margin-left: auto;
+  }
+}
+
+.page-number {
+  min-width: 36px;
+  padding: 0 8px;
+
+  &.active {
+    box-shadow: $shadow-sm;
+  }
+}
+
+.pagination-ellipsis {
+  padding: 0 8px;
+  color: var(--text-secondary);
+  user-select: none;
+}

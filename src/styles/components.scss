@@ -747,3 +747,495 @@ textarea {
 .hint {
   color: var(--text-secondary);
 }
+
+// Drawer component styles
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: $z-modal;
+  backdrop-filter: blur(2px);
+
+  &.drawer-overlay-entering {
+    animation: modal-overlay-fade-in 0.25s ease-out forwards;
+  }
+
+  &.drawer-overlay-closing {
+    animation: modal-overlay-fade-out 0.3s ease-in forwards;
+  }
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: $shadow-lg;
+  display: flex;
+  flex-direction: column;
+  max-width: 90vw;
+  overflow: hidden;
+
+  &.drawer-right {
+    right: 0;
+    border-radius: $radius-lg 0 0 $radius-lg;
+    transform-origin: right center;
+  }
+
+  &.drawer-left {
+    left: 0;
+    border-radius: 0 $radius-lg $radius-lg 0;
+    transform-origin: left center;
+  }
+
+  &.drawer-entering {
+    animation: drawer-slide-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  &.drawer-closing {
+    animation: drawer-slide-out 0.25s ease-in forwards;
+  }
+}
+
+@keyframes drawer-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes drawer-slide-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+.drawer-left.drawer-entering {
+  animation-name: drawer-slide-in-left;
+}
+
+.drawer-left.drawer-closing {
+  animation-name: drawer-slide-out-left;
+}
+
+@keyframes drawer-slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes drawer-slide-out-left {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-md $spacing-lg;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+
+  .drawer-title {
+    font-weight: 700;
+    font-size: 18px;
+    color: var(--text-primary);
+  }
+}
+
+.drawer-close {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: $radius-full;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, background-color 0.15s ease;
+
+  &:hover {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+  }
+}
+
+.drawer-body {
+  flex: 1;
+  padding: $spacing-lg;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+// Usage records table styles
+.usage-records-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+
+  th,
+  td {
+    padding: $spacing-sm $spacing-md;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  th {
+    background: var(--bg-secondary);
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+
+  tr {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+
+    &:hover {
+      background: var(--bg-secondary);
+    }
+  }
+
+  .cell-time {
+    white-space: nowrap;
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+
+  .cell-model {
+    font-weight: 500;
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cell-ip {
+    color: var(--text-secondary);
+    font-size: 13px;
+    width: 130px;
+    white-space: nowrap;
+  }
+
+  .cell-tokens {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 13px;
+  }
+
+  .cell-duration {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .streaming-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 6px;
+    border-radius: $radius-sm;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    
+    &.streaming {
+      background: rgba(59, 130, 246, 0.15);
+      color: var(--primary-color);
+    }
+    
+    &.standard {
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+    }
+  }
+}
+
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin-animation {
+  animation: spin 1s linear infinite;
+}
+
+.usage-records-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-md;
+  margin-bottom: $spacing-lg;
+  align-items: center;
+
+  .filter-group {
+    display: flex;
+    flex-direction: column;
+    min-width: 200px;
+    flex: 1; // Distribute space
+
+    label {
+      display: none;
+    }
+
+    input,
+    select {
+      padding: 8px 12px;
+      font-size: 14px;
+    }
+
+    &.actions {
+      min-width: auto;
+      flex: 0 0 auto;
+      
+      .filter-actions {
+        display: flex;
+        gap: $spacing-sm;
+      }
+    }
+  }
+}
+
+.usage-records-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: $spacing-lg;
+  padding-top: $spacing-md;
+  border-top: 1px solid var(--border-color);
+
+  .pagination-info {
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+
+  .pagination-controls {
+    display: flex;
+    gap: $spacing-sm;
+    align-items: center;
+  }
+}
+
+// Usage record detail styles
+.record-detail {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-lg;
+
+  .detail-section {
+    display: flex;
+    flex-direction: column;
+    gap: $spacing-sm;
+
+    .section-title {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+  }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: $spacing-md;
+  }
+
+  .detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    .item-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .item-value {
+      font-weight: 500;
+      color: var(--text-primary);
+      word-break: break-all;
+    }
+
+    &.full-width {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .detail-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: $spacing-md;
+
+    .tab-button {
+      padding: $spacing-sm $spacing-md;
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-weight: 500;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s ease;
+      margin-bottom: -1px;
+
+      &:hover {
+        color: var(--text-primary);
+      }
+
+      &.active {
+        color: var(--primary-color);
+        border-bottom-color: var(--primary-color);
+      }
+    }
+  }
+
+  .detail-content {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: $radius-md;
+    padding: $spacing-md;
+    max-height: 400px;
+    overflow: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 13px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text-primary);
+  }
+}
+
+body.drawer-open,
+html.drawer-open {
+  overflow: hidden;
+}
+
+// JSON Viewer styles
+.json-viewer {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  overflow: auto;
+  max-height: 400px;
+
+  .json-pre {
+    margin: 0;
+    padding: $spacing-md;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .json-code {
+    display: block;
+  }
+
+  .json-line {
+    display: block;
+    padding: 1px 0;
+  }
+
+  // Default (light mode) colors - VS Code light theme inspired
+  .json-key {
+    color: #0451a5; // Blue for keys
+  }
+
+  .json-string {
+    color: #a31515; // Red/maroon for strings
+  }
+
+  .json-number {
+    color: #098658; // Green for numbers
+  }
+
+  .json-boolean {
+    color: #0000ff; // Blue for booleans
+  }
+
+  .json-null {
+    color: #0000ff; // Blue for null
+  }
+}
+
+// Dark theme adjustments - VS Code dark theme inspired
+[data-theme='dark'] {
+  .json-viewer {
+    .json-key {
+      color: #9cdcfe; // Light blue for keys
+    }
+
+    .json-string {
+      color: #ce9178; // Orange for strings
+    }
+
+    .json-number {
+      color: #b5cea8; // Light green for numbers
+    }
+
+    .json-boolean {
+      color: #569cd6; // Blue for booleans
+    }
+
+    .json-null {
+      color: #569cd6; // Blue for null
+    }
+  }
+}
+
+// Also support prefers-color-scheme for users without data-theme attribute
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    .json-viewer {
+      .json-key {
+        color: #9cdcfe;
+      }
+
+      .json-string {
+        color: #ce9178;
+      }
+
+      .json-number {
+        color: #b5cea8;
+      }
+
+      .json-boolean {
+        color: #569cd6;
+      }
+
+      .json-null {
+        color: #569cd6;
+      }
+    }
+  }
+}
+
+.json-viewer-empty {
+  color: var(--text-secondary);
+  font-style: italic;
+  padding: $spacing-md;
+}
+
