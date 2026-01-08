@@ -51,6 +51,11 @@ export interface UsageRecordsListResult {
   total_pages: number;
 }
 
+export interface UsageRecordOptionsResult {
+  models: string[];
+  providers: string[];
+}
+
 // Activity Heatmap types
 export interface ActivityHeatmapDay {
   date: string;
@@ -114,12 +119,28 @@ export interface UsageSummary {
   unique_providers: number;
 }
 
+// Request Timeline types
+export interface RequestTimelinePoint {
+  hour: string;      // Format: "2006-01-02 15:00"
+  requests: number;  // Number of requests in this hour
+  tokens: number;    // Total tokens in this hour
+}
+
+export interface RequestTimeline {
+  start_time: string;
+  end_time: string;
+  total_hours: number;
+  max_requests: number;
+  points: RequestTimelinePoint[];
+}
+
 export const usageRecordsApi = {
   /**
    * Get paginated list of usage records
    */
   list: (query: UsageRecordsListQuery = {}): Promise<UsageRecordsListResult> =>
     apiClient.get('/usage-records', { params: query }),
+
 
   /**
    * Get a single usage record by ID with full details
@@ -152,8 +173,20 @@ export const usageRecordsApi = {
     apiClient.get('/usage-records/provider-stats', { params: { start_time: startTime, end_time: endTime } }),
 
   /**
+   * Get distinct models/providers in records for filter options.
+   */
+  getOptions: (startTime?: string, endTime?: string): Promise<UsageRecordOptionsResult> =>
+    apiClient.get('/usage-records/options', { params: { start_time: startTime, end_time: endTime } }),
+
+  /**
    * Get overall usage summary
    */
   getSummary: (startTime?: string, endTime?: string): Promise<UsageSummary> =>
     apiClient.get('/usage-records/summary', { params: { start_time: startTime, end_time: endTime } }),
+
+  /**
+   * Get hourly request distribution for timeline visualization
+   */
+  getTimeline: (startTime?: string, endTime?: string): Promise<RequestTimeline> =>
+    apiClient.get('/usage-records/timeline', { params: { start_time: startTime, end_time: endTime } }),
 };

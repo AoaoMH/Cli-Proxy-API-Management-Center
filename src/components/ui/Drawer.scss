@@ -1,0 +1,155 @@
+@use '../../styles/variables.scss' as *;
+
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  z-index: 1000;
+}
+
+.drawer-right {
+  margin-left: auto;
+}
+
+.drawer-left {
+  margin-right: auto;
+}
+
+.drawer {
+  height: 100vh;
+  background: var(--bg-primary);
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.25);
+}
+
+.drawer.drawer-left {
+  border-left: none;
+  border-right: 1px solid var(--border-color);
+  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.25);
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $spacing-md;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.drawer-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.drawer-close {
+  background: transparent;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: $radius-md;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+
+  &:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+  }
+}
+
+.drawer-body {
+  padding: $spacing-md;
+  overflow: auto;
+}
+
+.drawer-overlay-entering {
+  animation: drawerOverlayIn 0.25s ease-out forwards;
+}
+
+.drawer-overlay-closing {
+  animation: drawerOverlayOut 0.25s ease-in forwards;
+}
+
+.drawer-entering {
+  animation: drawerIn 0.25s ease-out forwards;
+}
+
+.drawer-closing {
+  animation: drawerOut 0.25s ease-in forwards;
+}
+
+@keyframes drawerOverlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes drawerOverlayOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes drawerIn {
+  from {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.drawer.drawer-left.drawer-entering {
+  animation: drawerInLeft 0.25s ease-out forwards;
+}
+
+.drawer.drawer-left.drawer-closing {
+  animation: drawerOutLeft 0.25s ease-in forwards;
+}
+
+@keyframes drawerOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+}
+
+@keyframes drawerInLeft {
+  from {
+    transform: translateX(-16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes drawerOutLeft {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-16px);
+    opacity: 0;
+  }
+}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useRef, useMemo } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TableCard } from '@/components/ui/TableCard';
 import { Button } from '@/components/ui/Button';
@@ -9,7 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Drawer } from '@/components/ui/Drawer';
 import { IconRefreshCw } from '@/components/ui/icons';
 import { JsonViewer } from '@/components/ui/JsonViewer';
-import { ActivityHeatmap, ModelStatsTable, ProviderStatsTable, UsageSummaryCard } from '@/components/analytics';
+import { ActivityHeatmap, ModelStatsTable, ProviderStatsTable, UsageSummaryCard, RequestTimeline } from '@/components/analytics';
 import { useAuthStore, useNotificationStore } from '@/stores';
 import { 
   usageRecordsApi, 
@@ -18,7 +18,8 @@ import {
   type ActivityHeatmap as ActivityHeatmapData,
   type ModelStats,
   type ProviderStats,
-  type UsageSummary
+  type UsageSummary,
+  type RequestTimeline as RequestTimelineData
 } from '@/services/api/usageRecords';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import './UsageRecordsPage.scss';
@@ -135,22 +136,31 @@ export function UsageRecordsPage() {
   const [providerStatsLoading, setProviderStatsLoading] = useState(true);
   const [providerStatsError, setProviderStatsError] = useState(false);
 
-  // Extract unique models and providers from records for filter options
-  const availableModels = useMemo(() => {
-    const models = new Set<string>();
-    records.forEach(record => {
-      if (record.model) models.add(record.model);
-    });
-    return Array.from(models).sort();
-  }, [records]);
+  const [timelineData, setTimelineData] = useState<RequestTimelineData | null>(null);
+  const [timelineLoading, setTimelineLoading] = useState(true);
+  const [timelineError, setTimelineError] = useState(false);
 
-  const availableProviders = useMemo(() => {
-    const providers = new Set<string>();
-    records.forEach(record => {
-      if (record.provider) providers.add(record.provider);
-    });
-    return Array.from(providers).sort();
-  }, [records]);
+  const [filterOptionsLoading, setFilterOptionsLoading] = useState(true);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [availableProviders, setAvailableProviders] = useState<string[]>([]);
+
+  const loadFilterOptions = useCallback(async () => {
+    if (connectionStatus !== 'connected') return;
+
+    setFilterOptionsLoading(true);
+    try {
+      const dateRange = getDateRangeFromPeriod(selectedPeriod);
+      const result = await usageRecordsApi.getOptions(dateRange.start_time, dateRange.end_time);
+      setAvailableModels((result.models || []).filter(Boolean).sort());
+      setAvailableProviders((result.providers || []).filter(Boolean).sort());
+    } catch (err) {
+      console.error('Failed to load filter options:', err);
+      setAvailableModels([]);
+      setAvailableProviders([]);
+    } finally {
+      setFilterOptionsLoading(false);
+    }
+  }, [connectionStatus, selectedPeriod]);
 
   // Load analytics data
   const loadAnalytics = useCallback(async () => {
@@ -209,6 +219,19 @@ export function UsageRecordsPage() {
       setProviderStatsError(true);
     } finally {
       setProviderStatsLoading(false);
+    }
+
+    // Load request timeline
+    setTimelineLoading(true);
+    setTimelineError(false);
+    try {
+      const data = await usageRecordsApi.getTimeline(dateRange.start_time, dateRange.end_time);
+      setTimelineData(data);
+    } catch (err) {
+      console.error('Failed to load request timeline:', err);
+      setTimelineError(true);
+    } finally {
+      setTimelineLoading(false);
     }
   }, [connectionStatus, selectedPeriod]);
 
@@ -292,7 +315,7 @@ export function UsageRecordsPage() {
     setSelectedRecord(null);
   };
 
-  // Handle filter changes with debounce
+  // Handle filter changes with debounce (filters affect table only)
   useEffect(() => {
     if (filterTimeoutRef.current) {
       clearTimeout(filterTimeoutRef.current);
@@ -300,7 +323,6 @@ export function UsageRecordsPage() {
 
     filterTimeoutRef.current = setTimeout(() => {
       loadRecords(true);
-      loadAnalytics();
     }, 300);
 
     return () => {
@@ -315,11 +337,12 @@ export function UsageRecordsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize, connectionStatus]);
 
-  // Load analytics on mount
+  // Load analytics + filter options (period only)
   useEffect(() => {
     loadAnalytics();
+    loadFilterOptions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connectionStatus]);
+  }, [connectionStatus, selectedPeriod]);
 
   // Handle auto refresh
   useEffect(() => {
@@ -437,17 +460,25 @@ export function UsageRecordsPage() {
             />
           </div>
         </div>
-        <div className="analytics-row">
+        <div className="analytics-row analytics-row-full">
           <div className="analytics-col analytics-col-full">
+            <RequestTimeline
+              data={timelineData}
+              title={t('usage_records.request_timeline', { defaultValue: '请求时间线' })}
+              isLoading={timelineLoading}
+              hasError={timelineError}
+            />
+          </div>
+        </div>
+        <div className="analytics-row analytics-row-2col">
+          <div className="analytics-col">
             <ModelStatsTable
               data={modelStats}
               isLoading={modelStatsLoading}
               hasError={modelStatsError}
             />
           </div>
-        </div>
-        <div className="analytics-row">
-          <div className="analytics-col analytics-col-full">
+          <div className="analytics-col">
             <ProviderStatsTable
               data={providerStats}
               isLoading={providerStatsLoading}
@@ -478,7 +509,7 @@ export function UsageRecordsPage() {
               value={modelFilter}
               onChange={setModelFilter}
               options={modelOptions}
-              disabled={disableControls}
+              disabled={disableControls || filterOptionsLoading}
               size="sm"
               className="filter-select"
             />
@@ -488,7 +519,7 @@ export function UsageRecordsPage() {
               value={providerFilter}
               onChange={setProviderFilter}
               options={providerOptions}
-              disabled={disableControls}
+              disabled={disableControls || filterOptionsLoading}
               size="sm"
               className="filter-select"
             />
@@ -678,7 +709,26 @@ export function UsageRecordsPage() {
                   {t('usage_records.response_body', { defaultValue: '响应体' })}
                 </button>
               </div>
-              <JsonViewer data={getTabContent()} emptyText={getNoDataText()} />
+              {activeTab === 'request_headers' || activeTab === 'response_headers' ? (
+                <div className="headers-table">
+                  {Object.entries((getTabContent() as Record<string, string> | null) || {}).length === 0 ? (
+                    <div className="headers-empty">{getNoDataText()}</div>
+                  ) : (
+                    <table>
+                      <tbody>
+                        {Object.entries((getTabContent() as Record<string, string> | null) || {}).map(([key, value]) => (
+                          <tr key={key}>
+                            <td className="header-key">{key}</td>
+                            <td className="header-value">{value}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              ) : (
+                <JsonViewer data={getTabContent()} emptyText={getNoDataText()} />
+              )}
             </div>
           </div>
         ) : null}

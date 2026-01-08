@@ -78,20 +78,18 @@
 
   .heatmap-grid-wrapper {
     display: flex;
-    gap: $spacing-xs;
+    align-items: flex-start;
   }
 
   .weekday-labels {
     display: flex;
     flex-direction: column;
-    gap: 2px;
     font-size: 0.625rem;
     color: var(--text-muted);
     flex-shrink: 0;
     width: 1.25rem;
 
     .weekday-label {
-      height: 0.75rem;
       display: flex;
       align-items: center;
       justify-content: flex-end;
@@ -101,7 +99,6 @@
 
   .heatmap-grid {
     display: grid;
-    gap: 2px;
     flex: 1;
     min-width: 0;
   }
@@ -109,20 +106,16 @@
   .heatmap-week {
     display: flex;
     flex-direction: column;
-    gap: 2px;
   }
 
   .heatmap-cell {
-    width: 0.75rem;
-    height: 0.75rem;
-    border-radius: 2px;
     background: var(--bg-tertiary, #f0f0f0);
     cursor: default;
     transition: transform $transition-fast, box-shadow $transition-fast;
 
     &:not(.empty):hover {
-      transform: scale(1.2);
-      box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+      transform: scale(1.15);
+      box-shadow: 0 0 6px rgba(0, 0, 0, 0.22);
       z-index: 1;
     }
 
@@ -131,7 +124,7 @@
     }
 
     &[data-level="0"] {
-      background: var(--bg-tertiary, #ebedf0);
+      background: rgba($primary-color, 0.08);
     }
 
     &[data-level="1"] {

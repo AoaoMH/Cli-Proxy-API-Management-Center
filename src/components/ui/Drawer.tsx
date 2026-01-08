@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, type PropsWithChildren, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { IconX } from './icons';
+import './Drawer.scss';
 
 interface DrawerProps {
   open: boolean;
@@ -113,7 +114,8 @@ export function Drawer({ open, title, onClose, width = 600, position = 'right', 
   if (!open && !isVisible) return null;
 
   const overlayClass = `drawer-overlay ${isClosing ? 'drawer-overlay-closing' : 'drawer-overlay-entering'}`;
-  const drawerClass = `drawer drawer-${position} ${isClosing ? 'drawer-closing' : 'drawer-entering'}`;
+  const drawerClass = `drawer drawer-${position} drawer-${position} ${isClosing ? 'drawer-closing' : 'drawer-entering'}`;
+
 
   const drawerContent = (
     <div className={overlayClass} onClick={handleClose}>
