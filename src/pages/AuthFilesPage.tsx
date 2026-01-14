@@ -232,6 +232,8 @@ export function AuthFilesPage() {
 
   const disableControls = connectionStatus !== 'connected';
 
+  const normalizeProviderKey = (value: string) => value.trim().toLowerCase();
+
   const handlePageSizeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.currentTarget.valueAsNumber;
     if (!Number.isFinite(value)) return;
@@ -667,7 +669,8 @@ export function AuthFilesPage() {
 
   // 检查模型是否被 OAuth 排除
   const isModelExcluded = (modelId: string, providerType: string): boolean => {
-    const excludedModels = excluded[providerType] || [];
+    const providerKey = normalizeProviderKey(providerType);
+    const excludedModels = excluded[providerKey] || excluded[providerType] || [];
     return excludedModels.some(pattern => {
       if (pattern.includes('*')) {
         // 支持通配符匹配
@@ -695,11 +698,10 @@ export function AuthFilesPage() {
 
   // OAuth 排除相关方法
   const openExcludedModal = (provider?: string) => {
-    const normalizedProvider = (provider || '').trim();
-    const fallbackProvider = normalizedProvider || (filter !== 'all' ? String(filter) : '');
-    const lookupKey = fallbackProvider
-      ? excludedProviderLookup.get(fallbackProvider.toLowerCase())
-      : undefined;
+    const normalizedProvider = normalizeProviderKey(provider || '');
+    const fallbackProvider =
+      normalizedProvider || (filter !== 'all' ? normalizeProviderKey(String(filter)) : '');
+    const lookupKey = fallbackProvider ? excludedProviderLookup.get(fallbackProvider) : undefined;
     const models = lookupKey ? excluded[lookupKey] : [];
     setExcludedForm({
       provider: lookupKey || fallbackProvider,
@@ -709,7 +711,7 @@ export function AuthFilesPage() {
   };
 
   const saveExcludedModels = async () => {
-    const provider = excludedForm.provider.trim();
+    const provider = normalizeProviderKey(excludedForm.provider);
     if (!provider) {
       showNotification(t('oauth_excluded.provider_required'), 'error');
       return;
@@ -743,15 +745,35 @@ const openDeleteExcludedConfirm = (provider: string) => {
 
   const handleDeleteExcludedConfirm = async () => {
     if (!excludedProviderToDelete) return;
+    const providerKey = normalizeProviderKey(excludedProviderToDelete);
+    if (!providerKey) {
+      showNotification(t('oauth_excluded.provider_required'), 'error');
+      return;
+    }
+
     try {
-      await authFilesApi.deleteOauthExcludedEntry(excludedProviderToDelete);
+      await authFilesApi.deleteOauthExcludedEntry(providerKey);
       await loadExcluded();
       showNotification(t('oauth_excluded.delete_success'), 'success');
       setDeleteExcludedConfirmOpen(false);
       setExcludedProviderToDelete(null);
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : '';
-      showNotification(`${t('oauth_excluded.delete_failed')}: ${errorMessage}`, 'error');
+      try {
+        const current = await authFilesApi.getOauthExcludedModels();
+        const next: Record<string, string[]> = {};
+        Object.entries(current).forEach(([key, models]) => {
+          if (normalizeProviderKey(key) === providerKey) return;
+          next[key] = models;
+        });
+        await authFilesApi.replaceOauthExcludedModels(next);
+        await loadExcluded();
+        showNotification(t('oauth_excluded.delete_success'), 'success');
+        setDeleteExcludedConfirmOpen(false);
+        setExcludedProviderToDelete(null);
+      } catch (fallbackErr: unknown) {
+        const errorMessage = fallbackErr instanceof Error ? fallbackErr.message : err instanceof Error ? err.message : '';
+        showNotification(`${t('oauth_excluded.delete_failed')}: ${errorMessage}`, 'error');
+      }
     }
   };
 

@@ -56,7 +56,7 @@ export function AiProvidersPage() {
 
   const [saving, setSaving] = useState(false);
   const [configSwitchingKey, setConfigSwitchingKey] = useState<string | null>(null);
-const [modal, setModal] = useState<ProviderModal | null>(null);
+  const [modal, setModal] = useState<ProviderModal | null>(null);
   const [ampcodeBusy, setAmpcodeBusy] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>({
     open: false,
@@ -165,7 +165,7 @@ const [modal, setModal] = useState<ProviderModal | null>(null);
         apiKey: form.apiKey.trim(),
         prefix: form.prefix?.trim() || undefined,
         baseUrl: form.baseUrl?.trim() || undefined,
-        headers: buildHeaderObject(headersToEntries(form.headers)),
+        headers: buildHeaderObject(form.headers),
         excludedModels: parseExcludedModels(form.excludedText),
       };
       const nextList =
@@ -191,13 +191,14 @@ const [modal, setModal] = useState<ProviderModal | null>(null);
     }
   };
 
-const openDeleteConfirm = (
+  const openDeleteConfirm = (
     type: 'gemini' | 'codex' | 'claude' | 'vertex' | 'openai',
     index: number
   ) => {
-    const messageKey = type === 'codex' || type === 'claude'
-      ? `ai_providers.${type}_delete_confirm`
-      : `ai_providers.${type}_delete_confirm`;
+    const messageKey =
+      type === 'codex' || type === 'claude'
+        ? `ai_providers.${type}_delete_confirm`
+        : `ai_providers.${type}_delete_confirm`;
     setDeleteConfirm({
       open: true,
       type,
@@ -399,7 +400,7 @@ const openDeleteConfirm = (
         prefix: form.prefix?.trim() || undefined,
         baseUrl,
         proxyUrl: form.proxyUrl?.trim() || undefined,
-        headers: buildHeaderObject(headersToEntries(form.headers)),
+        headers: buildHeaderObject(form.headers),
         models: entriesToModels(form.modelEntries),
         excludedModels: parseExcludedModels(form.excludedText),
       };
@@ -440,7 +441,7 @@ const openDeleteConfirm = (
     }
   };
 
-const deleteProviderEntry = (type: 'codex' | 'claude', index: number) => {
+  const deleteProviderEntry = (type: 'codex' | 'claude', index: number) => {
     const source = type === 'codex' ? codexConfigs : claudeConfigs;
     const entry = source[index];
     if (!entry) return;
@@ -462,7 +463,7 @@ const deleteProviderEntry = (type: 'codex' | 'claude', index: number) => {
         prefix: form.prefix?.trim() || undefined,
         baseUrl,
         proxyUrl: form.proxyUrl?.trim() || undefined,
-        headers: buildHeaderObject(headersToEntries(form.headers)),
+        headers: buildHeaderObject(form.headers),
         models: form.modelEntries
           .map((entry) => {
             const name = entry.name.trim();
@@ -496,7 +497,7 @@ const deleteProviderEntry = (type: 'codex' | 'claude', index: number) => {
     }
   };
 
-const deleteVertex = (index: number) => {
+  const deleteVertex = (index: number) => {
     const entry = vertexConfigs[index];
     if (!entry) return;
     openDeleteConfirm('vertex', index);
@@ -543,7 +544,7 @@ const deleteVertex = (index: number) => {
     }
   };
 
-const deleteOpenai = (index: number) => {
+  const deleteOpenai = (index: number) => {
     const entry = openaiProviders[index];
     if (!entry) return;
     openDeleteConfirm('openai', index);
@@ -663,7 +664,7 @@ const deleteOpenai = (index: number) => {
           onCloseModal={closeModal}
           onSave={saveOpenai}
         />
-</div>
+      </div>
 
       {/* Delete Provider Confirmation Modal */}
       <ConfirmModal
